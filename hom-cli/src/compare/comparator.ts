@@ -10,6 +10,7 @@ import generateNetReport from './network'
 const HOM_COMPARE_RESULT_VERSION = 1
 
 export async function compare(srcDir: FetchDirectory, destDir: string): Promise<CompareResult> {
+  console.log(`🧐 Comparing '${srcDir.name}'...`)
   // Helper method to create absolute file paths to the destination directory
   const destFilePath: PathFunction = (fileName: string) => path.join(destDir, srcDir.name, fileName)
   // Let's load the fetch results from file

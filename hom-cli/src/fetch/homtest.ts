@@ -2,14 +2,15 @@ import Profiles from './profiles'
 import yaml from 'yaml'
 import path from 'path'
 import foxr from 'foxr'
-import { wait } from './Utils'
+import { exec } from 'child_process'
+import Timeout from 'await-timeout'
 import DevTools from './devtools'
 import * as jetpack from 'fs-jetpack'
 import CliConfig from '../cli-config'
 
 // Increment if code changes result in different outputs
 const HOM_FETCH_RESULT_VERSION = 1
-const TIMEOUT_MS = 20000
+const TIMEOUT_MS = 50000
 
 export interface Fetch {
   websiteUrl: string,
@@ -48,9 +49,9 @@ class HomTest {
     // Get datetime of fetch
     const date = new Date()
     // Strip url of http schemes
-    const strippedUrl = url.replace(/(http|https)\:\/\//, '')
+    const strippedUrl = url.replace(/(http|https)\:\/\//, '').toLowerCase()
     // Replace all non-letters with an underscore so we have a safe ID
-    const folderName = strippedUrl.replace(/\W/g, '_')
+    const folderName = strippedUrl.replace(/\W/g, '_').toLowerCase()
 
     console.error(`🌐 Running hom test for ${strippedUrl} (${folderName})`)
 
@@ -78,27 +79,19 @@ class HomTest {
       homEnabled,
     }
 
+    console.error('\t💾 Saving results...')
     await jetpack.writeAsync(path.join(this.fetchDirectory, folderName, 'result.yaml'), yaml.stringify(result))
     return true
   }
 
   async tryFetch(url: string, homEnabled: boolean, screenshotPath: string, screenshotName: string): Promise<FetchRun | null> {
-    for (let i = 0; i < 3; ++i) {
-      const shared = { firefoxProcess: null }
-      const result = await Promise.race([this.fetch(url, homEnabled, screenshotPath, screenshotName, shared), raceTimout()])
-      if (result !== false && result !== true) {
-        return result
-      }
-      console.error(`\t🚨 HOM-test timed out after ${TIMEOUT_MS}ms. (Attempt ${i}/3)`)
-      if (shared.firefoxProcess !== null) {
-        await shared.firefoxProcess.kill()
-        shared.firefoxProcess = null
-        await this.resetProfile()
-        await wait(9000)
-        console.error('\t😔 Let\'s try that again...')
-      }
+    const shared = { firefoxProcess: null }
+    const result = await Promise.race([this.fetch(url, homEnabled, screenshotPath, screenshotName, shared), Timeout.set(TIMEOUT_MS, false)])
+    if (result !== false && result !== true  && result !== undefined) {
+      return result
     }
-    return null
+    // It is a great mystery for me but usually if we end up here the application is in an unrecoverable state.
+    console.error(`\t🚨 HOM-test timed out after ${TIMEOUT_MS}ms.`)
   }
 
   async fetch(url: string, homEnabled: boolean, screenshotPath: string, screenshotName: string, shared: any): Promise<FetchRun | boolean> {
@@ -113,15 +106,21 @@ class HomTest {
     }
 
     // Start Firefox
-    const [browser, firefoxProcess] = await foxr.launch({
+    const browser = await foxr.launch({
       executablePath: this.binaryPath,
       headless: false,
+      safeMode: false,
+      defaultViewport: {
+        width: 1200,
+        height: 1000,
+      },
       args: ['--start-debugger-server', 'ws:6003', '--profile', profilePath],
     })
-    shared.firefoxProcess = firefoxProcess
+    shared.firefoxProcess = browser
 
     // Set the HTTPS-Only pref
     await browser.setPref('dom.security.https_only_mode', homEnabled)
+    await browser.setTimeouts({ pageLoad: 20000, script: 20000 })
 
     // Connect to DevTools API, disable the cache and start monitoring network activity
     const client = await DevTools.new('ws://127.0.0.1:6003')
@@ -144,7 +143,7 @@ class HomTest {
     console.error('\t🙂 Done loading')
     if (!error) {
       // Let's wait 1.5 seconds for the site to finish loading other stuff
-      await wait(2500)
+      await Timeout.set(2500)
       await page.screenshot({ path: screenshotPath })
       resultObject.screenshotPath = screenshotName
     }
@@ -169,7 +168,7 @@ class HomTest {
 
     // Wait a bit to make sure Firefox is really closed
     // (Otherwise weird stuff happens)
-    await wait(5500)
+    await Timeout.set(5500)
     return resultObject
   }
 
@@ -178,17 +177,12 @@ class HomTest {
   }
 
   async resetProfile() {
-    await wait(6000)
+    await Timeout.set(6000)
     await this.profiles.cleanup()
-    await wait(1000)
+    await Timeout.set(1000)
     this.profiles = await Profiles.new(this.binaryPath, this.extensionPath)
-    await wait(4000)
+    await Timeout.set(4000)
   }
-}
-
-async function raceTimout() {
-  await wait(TIMEOUT_MS)
-  return false
 }
 
 export default HomTest

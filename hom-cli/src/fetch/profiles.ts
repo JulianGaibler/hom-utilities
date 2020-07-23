@@ -1,7 +1,7 @@
 import tmp from 'tmp'
 import foxr from 'foxr'
 import path from 'path'
-import { wait } from './Utils'
+import Timeout from 'await-timeout'
 import * as jetpack from 'fs-jetpack'
 
 class Profiles {
@@ -11,9 +11,10 @@ class Profiles {
     const tmpDir = tmp.dirSync()
     console.error('📄 Creating new Firefox Profile...')
     // Start Firefox to generate new profile
-    const [browser, _] = await foxr.launch({
+    const browser = await foxr.launch({
       executablePath: binaryPath,
       headless: false,
+      safeMode: false,
       args: ['--profile', path.join(tmpDir.name, 'main')],
     })
     // Set prefs on profile
@@ -32,11 +33,11 @@ class Profiles {
       await browser.install(extensionPath, false)
     }
 
-    await wait(1000)
+    await Timeout.set(1000)
 
     // Close Firefox
     await browser.close()
-    await wait(1500)
+    await Timeout.set(1500)
 
     const that = new Profiles()
     that.tmpDir = tmpDir

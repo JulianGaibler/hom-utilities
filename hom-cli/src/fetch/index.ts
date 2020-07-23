@@ -1,6 +1,5 @@
 import CliConfig from '../cli-config'
 import HomTest from './homtest'
-import { wait } from './Utils'
 
 export default async function(config: CliConfig, urls: string[]) {
 
