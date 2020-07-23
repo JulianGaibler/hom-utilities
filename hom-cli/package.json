@@ -12,7 +12,8 @@
   "author": "JulianWels",
   "license": "MIT",
   "dependencies": {
-    "foxr": "^0.10.1",
+    "await-timeout": "^1.1.1",
+    "foxr": "../foxr",
     "fs-jetpack": "^2.4.0",
     "json-stable-stringify": "^1.0.1",
     "pixelmatch": "^5.2.1",

@@ -1,0 +1,3 @@
+[submodule "foxr"]
+	path = foxr
+	url = https://github.com/JulianWels/foxr
