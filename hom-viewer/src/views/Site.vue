@@ -2,8 +2,8 @@
   <div class="site">
     <h1>{{websiteHost}}</h1>
     <h2>{{siteData.websiteUrl}}</h2>
-    <section>
-      <div class="imageCompare" v-if="siteData.images">
+    <section class="visualCompare">
+      <div class="sideBySide" v-if="siteData.images">
         <div>
           <img v-if="siteData.images.thumbnailDisabled" :src="`/compare_results/${siteData.id}/${siteData.images.thumbnailDisabled}`">
         </div>
@@ -11,6 +11,7 @@
           <img v-if="siteData.images.thumbnailEnabled" :src="`/compare_results/${siteData.id}/${siteData.images.thumbnailEnabled}`">
         </div>
       </div>
+      <router-link :to="{ name: 'Visual', params: { id: siteData.id }}" v-if="siteData.images.thumbnailDisabled && siteData.images.thumbnailEnabled">Compare Screenshots</router-link>
     </section>
 
     <section>
@@ -158,21 +159,35 @@ export default {
     margin-bottom 1rem
     color $hom-grey3
 
-.imageCompare
-  display grid
-  grid-gap 1rem
-  grid-template-columns 1fr 1fr
-  width 80%
-  margin 0 auto
-  > div
-    background url('~@/assets/hom-gradient.svg') center no-repeat
-    background-color $hom-grey1
-    border-radius .5rem
-    overflow hidden
-    border $hom-green1 solid .25rem
-    img
-      display block
-      width 100%
+.visualCompare
+  text-align center
+  .sideBySide
+    display grid
+    grid-gap 1rem
+    grid-template-columns 1fr 1fr
+    width 80%
+    margin 0 auto
+    > div
+      background url('~@/assets/hom-gradient.svg') center no-repeat
+      background-color $hom-grey1
+      border-radius .5rem
+      overflow hidden
+      border $hom-green1 solid .25rem
+      img
+        display block
+        width 100%
+  > a
+    display inline-block
+    color white
+    text-decoration none
+    padding .5rem 1rem
+    margin-bottom -2rem
+    transform translateY(-1rem)
+    font-weight 500
+    background $hom-gradient1
+    border-radius 5rem
+    font-size 1rem
+    border none
 
 tr.ignored
   opacity .5
