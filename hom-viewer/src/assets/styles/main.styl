@@ -1,0 +1,91 @@
+@import "./reset"
+@import "./mixins"
+@import "./palette"
+
+* {
+  -webkit-font-smoothing antialiased
+  -moz-osx-font-smoothing grayscale
+}
+
+html, body, #app
+  height 100%
+
+body
+  overflow-y scroll
+  color $hom-color
+  fill $hom-color
+  background $hom-background
+  font-family 'Heebo', sans-serif
+
+body::-webkit-scrollbar
+  width .5rem
+
+body::-webkit-scrollbar-track
+  background $hom-grey1
+
+body::-webkit-scrollbar-thumb
+  background $hom-grey3
+
+table
+  border-radius .5rem
+  overflow hidden
+  background-color #F7F7F7
+  width 100%
+  th, td
+    vertical-align middle
+    text-align left
+    padding .4rem .2rem
+    &.digits
+      font-family menlo, 'Courier New', Courier, monospace
+      font-size 0.9em
+      text-align center
+    &:first-child, &:last-child
+      padding-left 1rem
+      padding-right 1rem
+  th
+    background-color rgba(0,0,0,0.05)
+    padding-top 1rem
+    padding-bottom 1rem
+
+  tr:nth-child(2) > td
+    padding-top .5rem
+  &.light
+    background-color unset
+
+section
+  margin 2rem auto
+  padding 0 2rem
+  max-width 64rem
+
+
+.stats
+  display flex
+  flex-wrap wrap
+  justify-content center
+  border-radius .5rem
+  margin .5rem 0
+  .stat
+    text-align center
+    margin 1rem
+    flex 1
+    min-width 8rem
+    h2
+      font-size 3rem
+      font-weight 700
+      background $hom-gradient1
+      -webkit-background-clip text
+      -webkit-text-fill-color transparent
+    h3, p
+      margin-top .4rem
+      line-height 1.2
+    h3
+      font-weight 700
+    p
+      font-weight 500
+      opacity .8
+
+hr
+  border none
+  border-top 2px solid $hom-grey2
+  margin 1rem auto
+  width 80%

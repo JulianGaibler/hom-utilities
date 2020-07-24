@@ -9,6 +9,9 @@ export interface FetchDirectory {
   name: string,
 }
 
+const VISUAL_CUTOFF = 20.0 // in %
+const SUBRESOURCE_CUTOFF = 5.0 // in %
+
 class CompareIndex {
   fetchDirectories: FetchDirectory[]
   private compareResults: Map<string, CompareResult>
@@ -67,26 +70,38 @@ class CompareIndex {
   async generateIndex() {
     const allResults: CompareResult[] = Array.from(this.compareResults.entries()).map(arr => arr[1])
     const stats = {
-      // Sites crawled total
-      sitesCrawled: allResults.length,
-      // Didn’t load with HOM enabled
-      failedOnHom: 0,
-      // Had over 15% failed subresource loads
-      subresourceDiffOver15: 0,
-      // Had a visual difference of 15% or higher
-      visualDiffOver15: 0,
+      sitesCrawled: {
+        value: allResults.length,
+        name: 'Sites Crawled',
+        description: 'Number of websites that were crawled and indexed',
+      },
+      failedOnHom: {
+        value: 0,
+        name: 'Failed with HOM',
+        description: 'Websites that only failed when HTTPS-Only Mode was enabled',
+      },
+      highSubresourceDiff: {
+        value: 0,
+        name: 'High Subresource Difference',
+        description: `Websites where over ${SUBRESOURCE_CUTOFF}% of requested subresources failed to load`,
+      },
+      highVisualDiff: {
+        value: 0,
+        name: 'High Visual Difference',
+        description: `Websites where visual difference between screenshots was higher than ${VISUAL_CUTOFF}%`,
+      },
     }
 
     const indexResults = allResults.map((result: CompareResult) => {
 
       if (result.stats.loadedEnabled === LoadResult.FailedWithHomError) {
-        stats.failedOnHom++
+        stats.failedOnHom.value++
       }
-      if (result.stats.requestDiff > 15.0) {
-        stats.subresourceDiffOver15++
+      if (result.stats.requestDiff > SUBRESOURCE_CUTOFF) {
+        stats.highSubresourceDiff.value++
       }
-      if (result.stats.visualDiff > 15.0) {
-        stats.visualDiffOver15++
+      if (result.stats.visualDiff > VISUAL_CUTOFF) {
+        stats.highVisualDiff.value++
       }
 
       return {
