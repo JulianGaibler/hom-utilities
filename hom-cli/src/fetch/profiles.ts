@@ -11,7 +11,7 @@ class Profiles {
     const tmpDir = tmp.dirSync()
     console.error('📄 Creating new Firefox Profile...')
     // Start Firefox to generate new profile
-    const browser = await foxr.launch({
+    const [browser] = await foxr.launch({
       executablePath: binaryPath,
       headless: false,
       safeMode: false,

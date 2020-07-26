@@ -18,6 +18,8 @@
     "json-stable-stringify": "^1.0.1",
     "pixelmatch": "^5.2.1",
     "sharp": "^0.25.4",
+    "threads": "^1.6.3",
+    "tiny-worker": "^2.3.0",
     "tmp": "^0.2.1",
     "ws": "^7.3.0",
     "yaml": "^1.10.0",

@@ -5,7 +5,9 @@ import { Fetch, FetchRun } from '../fetch/homtest'
 import { FetchDirectory } from './compare-index'
 import { PathFunction, CompareResult, LoadResult } from './types'
 import generateImages from './images'
-import generateNetReport from './network'
+import generateNetReport, { RawEvent } from './network'
+import { round } from '../utils'
+import { expose } from 'threads/worker'
 
 const HOM_COMPARE_RESULT_VERSION = 1
 
@@ -34,6 +36,7 @@ export async function compare(srcDir: FetchDirectory, destDir: string): Promise<
     stats: {
       visualDiff: visualDifference,
       requestDiff: netDifference,
+      upgradeDiff: netStats.upgradedWithHom > 0 ? round((netStats.upgradedWithHomAndFailed / netStats.upgradedWithHom) * 100) : null,
 
       loadedDisabled: getLoadResult(fetchResults.homDisabled),
       loadedEnabled: getLoadResult(fetchResults.homEnabled),
@@ -44,16 +47,33 @@ export async function compare(srcDir: FetchDirectory, destDir: string): Promise<
 
   await saveResults(results, destFilePath)
 
+  console.log(`✅ Done with '${srcDir.name}'...`)
   return results
 }
 
 async function getResultFile(directoryPath: string): Promise<Fetch> {
-  const fetchResultFile = await jetpack.readAsync(path.join(directoryPath, 'result.yaml'))
-  return yaml.parse(fetchResultFile)
+  try {
+    const fetchResultFile = await jetpack.readAsync(path.join(directoryPath, 'result.yaml'))
+    return yaml.parse(fetchResultFile)
+  } catch (e) {
+    console.error(e)
+    throw new Error(`Something went wrong when reading and parsing '${directoryPath}'.`)
+  }
 }
 
 function getLoadResult(fetchRun: FetchRun): LoadResult {
   if (!fetchRun.failedToLoad) {
+    if ((fetchRun.networkEvents as RawEvent[]).some(event => {
+      if (event.cause.type !== 'document') return false
+      const status = event.updates?.responseStart?.response?.status
+      if (status) {
+        const statusNr = parseInt(status, 2)
+        return statusNr >= 400
+      }
+      return false
+    })) {
+      return LoadResult.ErrorCode
+    }
     return LoadResult.Loaded
   } else if (fetchRun.httpsOnlyErrorPage) {
     return LoadResult.FailedWithHomError
@@ -65,3 +85,5 @@ function getLoadResult(fetchRun: FetchRun): LoadResult {
 async function saveResults(compareResult: CompareResult, pathFunction: PathFunction) {
   await jetpack.writeAsync(pathFunction('result.yaml'), yaml.stringify(compareResult))
 }
+
+expose(compare)

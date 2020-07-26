@@ -17,12 +17,14 @@ export enum WhenRequested {
 export enum LoadResult {
   Loaded = 'loaded',
   Failed = 'failed',
+  ErrorCode = 'errorCode',
   FailedWithHomError = 'failedWithHomError',
 }
 
 export interface Stats {
   visualDiff: number | null,
   requestDiff: number | null,
+  upgradeDiff: number | null,
 
   loadedDisabled: LoadResult,
   loadedEnabled: LoadResult,
@@ -30,6 +32,7 @@ export interface Stats {
 
 export interface NetStats {
   overallRequests: number,
+  overallSubresourceRequests: number,
 
   requestsOnlyDisabled: number,
   requestsOnlyEnabled: number,
@@ -39,6 +42,7 @@ export interface NetStats {
 
   upgradedWithHom: number,
   failedOnHom: number,
+  upgradedWithHomAndFailed: number,
 
   byType: TypeSummary[],
 }

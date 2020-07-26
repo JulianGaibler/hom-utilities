@@ -13,6 +13,7 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
 
   const netStats: NetStats = {
     overallRequests: mergedEvents.length,
+    overallSubresourceRequests: 0,
 
     requestsOnlyDisabled: 0,
     requestsOnlyEnabled: 0,
@@ -22,6 +23,7 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
 
     upgradedWithHom: 0,
     failedOnHom: 0,
+    upgradedWithHomAndFailed: 0,
 
     byType: [],
   }
@@ -46,11 +48,17 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
     else if (whenRequested === WhenRequested.HomDisabled) { netStats.requestsOnlyDisabled++ }
     else { netStats.requestsBoth++ }
 
-    if (homEnabled && homEnabled.homUpgraded) {
+    if (type !== 'document') {
+      netStats.overallSubresourceRequests++
+    }
+    if (homEnabled && homEnabled.homUpgraded && type !== 'document') {
       netStats.upgradedWithHom++
     }
     if (homEnabled && homEnabled.failed !== false && homEnabled.failed.blocked === false) {
       netStats.failedOnHom++
+    }
+    if (homEnabled && homEnabled.homUpgraded && type !== 'document' && homEnabled.failed !== false && homEnabled.failed.blocked === false) {
+      netStats.upgradedWithHomAndFailed++
     }
 
     // Assemble result object
@@ -150,17 +158,14 @@ function mergeNetworkEvents(disabledRun: FetchRun, enabledRun: FetchRun): Merged
 function getEventResult(rawEvent: RawEvent): [EventResult, boolean] {
   if (rawEvent === null) return [null, false]
 
+  // eslint-disable-next-line no-bitwise
+  const upgraded = !!(rawEvent.httpsOnlyStatus & HTTPS_ONLY_UPGRADED_LISTENER_REGISTERED)
+
   let loaded: EventResult['loaded'] = false
   let failed: EventResult['failed'] = false
   let ignored = false
 
-  if (!rawEvent.blockedReason && rawEvent.updates.securityInfo || rawEvent.isXHR) {
-    loaded = {
-      securityState: stringToSecurityState(rawEvent.isXHR ? 'xhr' : rawEvent.updates.securityInfo.state),
-      status: rawEvent.updates.responseStart ? rawEvent.updates.responseStart.response.status : null,
-      statusText: rawEvent.updates.responseStart ? rawEvent.updates.responseStart.response.statusText : null,
-    }
-  } else if (rawEvent.blockedReason !== undefined && rawEvent.blockedReason > 0) {
+  if (rawEvent.blockedReason !== undefined && rawEvent.blockedReason > 0) {
     failed = {
       blocked: true,
       blockedReason: BLOCKED_REASON_MESSAGES[rawEvent.blockedReason],
@@ -170,14 +175,19 @@ function getEventResult(rawEvent: RawEvent): [EventResult, boolean] {
       blocked: false,
       blockedReason: '',
     }
+  } else if (!rawEvent.blockedReason && rawEvent.updates.securityInfo || rawEvent.isXHR) {
+    loaded = {
+      securityState: stringToSecurityState(rawEvent.isXHR ? 'xhr' : rawEvent.updates.securityInfo.state),
+      status: rawEvent.updates.responseStart ? rawEvent.updates.responseStart.response.status : null,
+      statusText: rawEvent.updates.responseStart ? rawEvent.updates.responseStart.response.statusText : null,
+    }
   } else {
-    console.error('🔥 [rawEvent]', rawEvent)
+    // console.error('🔥 [rawEvent]', rawEvent)
     ignored = true
   }
 
   const result: EventResult = {
-    // eslint-disable-next-line no-bitwise
-    homUpgraded: !!(rawEvent.httpsOnlyStatus & HTTPS_ONLY_UPGRADED_LISTENER_REGISTERED),
+    homUpgraded: upgraded,
     loaded,
     failed,
     rawEvent,
@@ -233,7 +243,7 @@ const BLOCKED_REASON_MESSAGES = {
   6000: 'Blocked By Extension',
 }
 
-interface RawEvent {
+export interface RawEvent {
   actor: string,
   startedDateTime: string,
   timeStamp: number,

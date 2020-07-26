@@ -3,6 +3,7 @@ import yaml from 'yaml'
 import * as jetpack from 'fs-jetpack'
 import CliConfig from '../cli-config'
 import { CompareResult, LoadResult } from './types'
+import { round } from '../utils'
 
 export interface FetchDirectory {
   path: string,
@@ -10,7 +11,7 @@ export interface FetchDirectory {
 }
 
 const VISUAL_CUTOFF = 20.0 // in %
-const SUBRESOURCE_CUTOFF = 5.0 // in %
+const SUBRESOURCE_CUTOFF = 0.0 // in %
 
 class CompareIndex {
   fetchDirectories: FetchDirectory[]
@@ -69,51 +70,71 @@ class CompareIndex {
 
   async generateIndex() {
     const allResults: CompareResult[] = Array.from(this.compareResults.entries()).map(arr => arr[1])
-    const stats = {
-      sitesCrawled: {
-        value: allResults.length,
-        name: 'Sites Crawled',
-        description: 'Number of websites that were crawled and indexed',
-      },
-      failedOnHom: {
-        value: 0,
-        name: 'Failed with HOM',
-        description: 'Websites that only failed when HTTPS-Only Mode was enabled',
-      },
-      highSubresourceDiff: {
-        value: 0,
-        name: 'High Subresource Difference',
-        description: `Websites where over ${SUBRESOURCE_CUTOFF}% of requested subresources failed to load`,
-      },
-      highVisualDiff: {
-        value: 0,
-        name: 'High Visual Difference',
-        description: `Websites where visual difference between screenshots was higher than ${VISUAL_CUTOFF}%`,
-      },
-    }
 
-    const indexResults = allResults.map((result: CompareResult) => {
+    let failedOnHom = 0
+    let highVisualDiff = 0
+    let subresourcesLoaded = 0
+    let subresourcesUpgraded = 0
+    let subresourcesUpgradedAndFailed = 0
 
+    const indexResults = allResults.map((result: CompareResult) => ({
+      id: result.id,
+      websiteUrl: result.websiteUrl,
+      dateFetched: result.dateFetched,
+      dateCompared: result.dateCompared,
+      homFetchVersion: result.homFetchVersion,
+      homCompareVersion: result.homCompareVersion,
+      stats: result.stats,
+      netStats: result.netStats,
+    }))
+
+    indexResults.forEach(result => {
       if (result.stats.loadedEnabled === LoadResult.FailedWithHomError) {
-        stats.failedOnHom.value++
-      }
-      if (result.stats.requestDiff > SUBRESOURCE_CUTOFF) {
-        stats.highSubresourceDiff.value++
+        failedOnHom++
       }
       if (result.stats.visualDiff > VISUAL_CUTOFF) {
-        stats.highVisualDiff.value++
+        highVisualDiff++
       }
 
-      return {
-        id: result.id,
-        websiteUrl: result.websiteUrl,
-        dateFetched: result.dateFetched,
-        dateCompared: result.dateCompared,
-        homFetchVersion: result.homFetchVersion,
-        homCompareVersion: result.homCompareVersion,
-        stats: result.stats,
-      }
+      subresourcesLoaded += result.netStats.overallSubresourceRequests
+      subresourcesUpgraded += result.netStats.upgradedWithHom
+      subresourcesUpgradedAndFailed += result.netStats.upgradedWithHomAndFailed
     })
+
+
+    const stats = [
+      {
+        value: allResults.length,
+        type: 'number',
+        name: 'Sites Crawled',
+        description: 'Number of crawled websites',
+      }, {
+        value: failedOnHom,
+        type: 'number',
+        name: 'Failed with HOM',
+        description: 'Websites that only failed when hom was enabled',
+      }, {
+        value: highVisualDiff,
+        type: 'number',
+        name: 'High Visual Difference',
+        description: `Websites where visual difference between screenshots was higher than ${VISUAL_CUTOFF}%`,
+      }, {
+        value: [subresourcesUpgraded, subresourcesLoaded],
+        type: 'percentage',
+        name: 'Subresources upgraded',
+        description: 'Percentage of all upgraded subresources',
+      }, {
+        value: [subresourcesUpgradedAndFailed, subresourcesUpgraded],
+        type: 'percentage',
+        name: 'Failed upgrades',
+        description: 'Percentage of failed subresources out of all upgraded subresources',
+      }, {
+        value: [subresourcesUpgradedAndFailed, subresourcesLoaded],
+        type: 'percentage',
+        name: 'Failed upgrades total',
+        description: 'Percentage of failed subresources out of all loaded subresources',
+      },
+    ]
 
     await jetpack.writeAsync(jetpack.path('..', this.compareIndexPath), yaml.stringify({ stats, results: indexResults }))
   }

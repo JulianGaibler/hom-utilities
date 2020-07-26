@@ -1,6 +1,7 @@
 import yargs from 'yargs'
 import CliConfig from './cli-config'
 import Fetch from './fetch'
+import doFetch from './fetch/fetch'
 import Compare from './compare'
 
 
@@ -16,6 +17,7 @@ const args = yargs
       type: 'string',
     })
   })
+  .command('singlefetch <args...>', 'Loads websites once with hom enabled and once with hom disabled')
   .command('compare <config> [date]', 'Loads websites once with hom enabled and once with hom disabled', y => {
     y.positional('config', {
       describe: 'yaml configuration file for hom',
@@ -31,15 +33,20 @@ const args = yargs
   .help()
   .argv
 
-CliConfig.new(args.config).then(async config => {
-  switch (args._[0]) {
-    case 'fetch':
-      await Fetch(config, args.urls as string[])
-      break
-    case 'compare':
-      await Compare(config, args.date as string)
-      break
-  }
-}).catch(e => {
-  console.error('🔥 Hmm, something went wrong:', e)
-})
+if (args._[0] === 'singlefetch') {
+  doFetch.apply(null, args.args)
+} else {
+  CliConfig.new(args.config).then(async config => {
+    switch (args._[0]) {
+      case 'fetch':
+        await Fetch(config, args.urls as string[])
+        break
+      case 'compare':
+        await Compare(config, args.date as string)
+        break
+    }
+    process.exit(0)
+  }).catch(e => {
+    console.error('🔥 Hmm, something went wrong:', e)
+  })
+}
