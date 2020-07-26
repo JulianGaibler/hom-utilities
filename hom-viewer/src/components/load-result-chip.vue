@@ -5,6 +5,9 @@
   <div class="chip bad" v-else-if="loadResult === 'failedWithHomError'">
     <BadIcon /> HOM Err Page
   </div>
+  <div class="chip bad" v-else-if="loadResult === 'errorCode'">
+    <BadIcon /> Err Code
+  </div>
   <div class="chip bad-hom" v-else>
     <BadIcon /> Failed
   </div>

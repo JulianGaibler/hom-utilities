@@ -29,9 +29,10 @@ export default {
 .control
   display inline-block
   padding .2rem
-  background #F0F0F0
+  background rgba(0, 0, 0, 0.05)
   border-radius .6rem
   button
+    background unset
     font-size .9rem
     font-weight 500
     border none

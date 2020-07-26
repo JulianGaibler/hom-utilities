@@ -73,9 +73,12 @@ div.center
   margin 2rem 0 1rem 0
 
 .imageCompare
-  width 80%
   margin 1rem auto
+  text-align center
   > div
+    height 75vh
+    min-height 50rem
+    display inline-block
     background url('~@/assets/hom-gradient.svg') center no-repeat
     background-color $hom-grey1
     border-radius .5rem
@@ -83,5 +86,5 @@ div.center
     border $hom-green1 solid .25rem
     img
       display block
-      width 100%
+      height 100%
 </style>

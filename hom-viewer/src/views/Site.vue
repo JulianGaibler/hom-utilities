@@ -15,74 +15,59 @@
     </section>
 
     <section>
-      <div class="stats" v-if="siteData.stats">
+      <div class="miniStats" v-if="siteData.stats">
         <div class="stat">
           <h2>{{siteData.netStats.overallRequests}}</h2>
-          <p>Overall Requests</p>
+          <h3>Overall Requests</h3>
         </div>
         <div class="stat">
           <h2>{{formatPercentage(siteData.stats.visualDiff)}}</h2>
-          <p>Visual Diff</p>
+          <h3>Visual Diff</h3>
         </div>
         <div class="stat">
           <h2>{{formatPercentage(siteData.stats.requestDiff)}}</h2>
-          <p>Request Diff</p>
+          <h3>Request Diff</h3>
         </div>
       </div>
-      <hr>
-      <div class="stats" v-if="siteData.stats">
+
+      <div class="miniStats" v-if="siteData.stats">
         <div class="stat">
           <h2>{{siteData.netStats.requestsOnlyDisabled}}</h2>
-          <p>Requested only without HOM</p>
+          <h3>Requested only without HOM</h3>
         </div>
         <div class="stat">
           <h2>{{siteData.netStats.requestsOnlyEnabled}}</h2>
-          <p>Requested only with HOM</p>
+          <h3>Requested only with HOM</h3>
         </div>
         <div class="stat">
           <h2>{{siteData.netStats.requestsBoth}}</h2>
-          <p>Requested Both</p>
+          <h3>Requested Both</h3>
         </div>
       </div>
-      <hr>
-      <div class="stats" v-if="siteData.stats">
+
+      <div class="miniStats" v-if="siteData.stats">
         <div class="stat">
           <h2>{{siteData.netStats.requestsIgnored}}</h2>
-          <p>Ignored Requests</p>
+          <h3>Ignored Requests</h3>
         </div>
         <div class="stat">
           <h2>{{siteData.netStats.upgradedWithHom}}</h2>
-          <p>Upgraded with HOM</p>
+          <h3>Upgraded with HOM</h3>
         </div>
         <div class="stat">
-          <h2>{{siteData.netStats.failedOnHom}}</h2>
-          <p>Failed with HOM</p>
+          <h2>{{siteData.netStats.upgradedWithHomAndFailed}}</h2>
+          <h3>Failed with HOM</h3>
         </div>
       </div>
-    </section>
-
-    <section>
-      <table class="light" v-if="siteData.netStats">
-        <tr>
-          <th>Type</th>
-          <th>Requested</th>
-          <th>Failed</th>
-        </tr>
-        <tr v-for="type in siteData.netStats.byType" :key="type.name">
-          <td>{{type.name}}</td>
-          <td>{{type.requested}}</td>
-          <td>{{type.failed}}</td>
-        </tr>
-      </table>
     </section>
 
     <section>
       <table>
         <tr>
           <th>URL</th>
-          <th>Type</th>
-          <th>HOM Disabled</th>
-          <th>HOM Enabled</th>
+          <th class="medium">Type</th>
+          <th class="medium">HOM Disabled</th>
+          <th class="medium">HOM Enabled</th>
         </tr>
         <tr v-for="event in sortedEvents" :key="event.id" :class="{ ignored: event.ignored }">
           <td><div class="ellipsis">{{event.url}}</div></td>
@@ -145,6 +130,7 @@ export default {
 @import "~@/assets/styles/palette.styl"
 
 .site
+  padding-top 3rem
   > h1
     font-size 3rem
     font-weight 700
@@ -156,7 +142,7 @@ export default {
     font-weight 700
     text-transform lowercase
     text-align center
-    margin-bottom 1rem
+    margin-bottom 3rem
     color $hom-grey3
 
 .visualCompare
@@ -197,5 +183,5 @@ tr.ignored
   text-overflow ellipsis
   white-space nowrap
   overflow hidden
-  max-width 20rem
+  max-width 100%
 </style>
