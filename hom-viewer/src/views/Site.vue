@@ -2,6 +2,17 @@
   <div class="site">
     <h1>{{websiteHost}}</h1>
     <h2>{{siteData.websiteUrl}}</h2>
+
+    <section v-if="siteData.adult" class="content-warn">
+      <div>
+        <h2>Careful: Adult Content</h2>
+        <p>This is a website with adult content. It's worth crawling those sites as they're popular but be aware of that, especially when you're looking at URLs.</p>
+      </div>
+      <div>
+        <video controls="controls"><source data-v-c224a382="" src="//archive.jwels.berlin/files/compressed/27Fyz-3d283b94f556ca07.mp4" type="video/mp4"><source src="//archive.jwels.berlin/files/compressed/27Fyz-3d283b94f556ca07.mp4" type="video/mp4"></video>
+      </div>
+    </section>
+
     <section class="visualCompare">
       <div class="sideBySide" v-if="siteData.images">
         <div>

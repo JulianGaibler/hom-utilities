@@ -14,6 +14,7 @@ export interface Fetch {
   websiteUrl: string,
   homFetchVersion: number,
   dateISO: string,
+  adult?: boolean,
   homDisabled: FetchRun,
   homEnabled: FetchRun,
 }
