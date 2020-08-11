@@ -21,16 +21,16 @@ export default async function(srcDirPath: string, fetchResult: Fetch, destFilePa
     screenshotDiff: null,
   }
 
-  if (screenshotPathOn) {
+  if (screenshotPathOn && !fetchResult.adult) {
     files.thumbnailDisabled = 'thumbnailDisabled.jpg'
     await createThumbnail(screenshotPathOn, destFilePath(files.thumbnailDisabled))
   }
-  if (screenshotPathOff) {
+  if (screenshotPathOff && !fetchResult.adult) {
     files.thumbnailEnabled = 'thumbnailEnabled.jpg'
     await createThumbnail(screenshotPathOff, destFilePath(files.thumbnailEnabled))
   }
   if (screenshotPathOn && screenshotPathOff) {
-    visualDifference = await compareImages(screenshotPathOn, screenshotPathOff, destFilePath, files)
+    visualDifference = await compareImages(screenshotPathOn, screenshotPathOff, destFilePath, files, fetchResult.adult)
   }
 
   return [visualDifference, files]
@@ -66,7 +66,7 @@ async function createThumbnail(fileFrom: string, fileTo: string) {
  * @param compareResult ScreenshotFiles object
  * @returns Visual difference in %
  */
-async function compareImages(path1: string, path2: string, createPath: PathFunction, compareResult: ScreenshotFiles): Promise<number> {
+async function compareImages(path1: string, path2: string, createPath: PathFunction, compareResult: ScreenshotFiles, adult: boolean): Promise<number> {
   const dimension = 1000
   const createBuffer = (filePath: string) => sharp(filePath)
     .resize({
@@ -86,13 +86,15 @@ async function compareImages(path1: string, path2: string, createPath: PathFunct
     diffColor: [41,202,164],
   })
 
-  compareResult.screenshotDisabled = 'disabled.png'
-  compareResult.screenshotEnabled = 'enabled.png'
-  compareResult.screenshotDiff = 'diff.png'
+  if (!adult) {
+    compareResult.screenshotDisabled = 'disabled.png'
+    compareResult.screenshotEnabled = 'enabled.png'
+    compareResult.screenshotDiff = 'diff.png'
 
-  jetpack.write(createPath(compareResult.screenshotDisabled), PNG.sync.write(buffer1))
-  jetpack.write(createPath(compareResult.screenshotEnabled), PNG.sync.write(buffer2))
-  jetpack.write(createPath(compareResult.screenshotDiff), PNG.sync.write(output))
+    jetpack.write(createPath(compareResult.screenshotDisabled), PNG.sync.write(buffer1))
+    jetpack.write(createPath(compareResult.screenshotEnabled), PNG.sync.write(buffer2))
+    jetpack.write(createPath(compareResult.screenshotDiff), PNG.sync.write(output))
+  }
 
   return round((numDifferentPixels / (dimension * dimension)) * 100)
 }

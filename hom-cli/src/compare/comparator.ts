@@ -45,6 +45,10 @@ export async function compare(srcDir: FetchDirectory, destDir: string): Promise<
     eventResults,
   }
 
+  if (fetchResults.adult) {
+    results.adult = fetchResults.adult
+  }
+
   await saveResults(results, destFilePath)
 
   console.log(`✅ Done with '${srcDir.name}'...`)

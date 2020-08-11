@@ -68,6 +68,8 @@ export interface CompareResult {
   homFetchVersion: number,
   homCompareVersion: number,
 
+  adult?: boolean,
+
   // Names of image files
   images: ScreenshotFiles,
 
