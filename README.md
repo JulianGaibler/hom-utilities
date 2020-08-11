@@ -17,6 +17,8 @@ The CLI consists of 'hom fetch' and 'hom compare'
 
 I forked a module called [Foxr](https://github.com/JulianWels/foxr) and added it as a local submodule, so it has to be packaged seperately:
 
+Fetching websites requires a modified version of Firefox. In the root directory of this repository is a file called `firefox.patch` which applies all neccesary changes.
+
 ``` bash
 # Navigate to the foxr directory
 cd forx

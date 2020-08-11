@@ -1,0 +1,611 @@
+# HG changeset patch
+# User julianwels <julianwels@mozilla.com>
+# Date 1596053937 -7200
+#      Wed Jul 29 22:18:57 2020 +0200
+# Node ID 611356f01c27e974c5a197a0b674d54f8b17cdb0
+# Parent  47579e4376f5101fd5d4ad0fec26c1f66d57316a
+Bug 1653026 - Added new HTTPS-Only Mode UI in site-identity panel and removed permission from list.
+
+Differential Revision: https://phabricator.services.mozilla.com/D86566
+
+diff --git a/browser/base/content/browser-siteIdentity.js b/browser/base/content/browser-siteIdentity.js
+--- a/browser/base/content/browser-siteIdentity.js
++++ b/browser/base/content/browser-siteIdentity.js
+@@ -247,6 +247,18 @@ var gIdentityHandler = {
+       "identity-popup-custom-root-learn-more"
+     ));
+   },
++  get _identityPopupHttpsOnly() {
++    delete this._identityPopupCustomRootLearnMore;
++    return (this._identityPopupCustomRootLearnMore = document.getElementById(
++      "identity-popup-https-only"
++    ));
++  },
++  get _identityPopupHttpsOnlySupportLink() {
++    delete this._identityPopupCustomRootLearnMore;
++    return (this._identityPopupCustomRootLearnMore = document.getElementById(
++      "identity-popup-https-only-support-link"
++    ));
++  },
+   get _identityPopupMixedContentLearnMore() {
+     delete this._identityPopupMixedContentLearnMore;
+     return (this._identityPopupMixedContentLearnMore = [
+@@ -373,7 +385,24 @@ var gIdentityHandler = {
+     );
+     return this._protectionsPanelEnabled;
+   },
+-
++  get _httpsOnlyModeEnabled() {
++    delete this._httpsOnlyModeEnabled;
++    XPCOMUtils.defineLazyPreferenceGetter(
++      this,
++      "_httpsOnlyModeEnabled",
++      "dom.security.https_only_mode"
++    );
++    return this._httpsOnlyModeEnabled;
++  },
++  get _httpsOnlyModeEnabledPBM() {
++    delete this._httpsOnlyModeEnabledPBM;
++    XPCOMUtils.defineLazyPreferenceGetter(
++      this,
++      "_httpsOnlyModeEnabledPBM",
++      "dom.security.https_only_mode_pbm"
++    );
++    return this._httpsOnlyModeEnabledPBM;
++  },
+   get _useGrayLockIcon() {
+     delete this._useGrayLockIcon;
+     XPCOMUtils.defineLazyPreferenceGetter(
+@@ -486,6 +515,48 @@ var gIdentityHandler = {
+   },
+ 
+   /**
++   * Removes HTTPS-Only Mode exception for the current principal
++   * and reloads page afterwards.
++   */
++  blockInsecureLoads() {
++    SitePermissions.removeFromPrincipal(
++      gBrowser.contentPrincipal,
++      "https-only-load-insecure"
++    );
++    BrowserReloadSkipCache();
++    if (this._popupInitialized) {
++      PanelMultiView.hidePopup(this._identityPopup);
++    }
++  },
++  /**
++   * Creates upgrade exception on current principal for HTTPS-Only Mode
++   * @param  {[type]} reloadPage Whether to reload the page or not.
++   */
++  allowInsecureLoads(reloadPage) {
++    // Permissions don't persist in PBM, but let's make sure anyway
++    const permissionScope = PrivateBrowsingUtils.isWindowPrivate(window)
++      ? Ci.nsIHttpsOnlyModePermission.LOAD_INSECURE_ALLOW_SESSION
++      : Ci.nsIHttpsOnlyModePermission.LOAD_INSECURE_ALLOW;
++
++    SitePermissions.setForPrincipal(
++      gBrowser.contentPrincipal,
++      "https-only-load-insecure",
++      permissionScope
++    );
++
++    // The page only needs to reload if we switch between allow and block
++    if (reloadPage) {
++      BrowserReloadSkipCache();
++      if (this._popupInitialized) {
++        PanelMultiView.hidePopup(this._identityPopup);
++      }
++      return;
++    }
++    // Otherwise we just refresh the interface
++    this.refreshIdentityPopup();
++  },
++
++  /**
+    * Helper to parse out the important parts of _secInfo (of the SSL cert in
+    * particular) for use in constructing identity UI strings
+    */
+@@ -929,6 +1000,12 @@ var gIdentityHandler = {
+       baseURL + "enterprise-roots"
+     );
+ 
++    // Update "Learn More" for HTTPS-Only identity popup
++    this._identityPopupHttpsOnlySupportLink.setAttribute(
++      "href",
++      baseURL + "https-only-pref"
++    );
++
+     // This is in the properties file because the expander used to switch its tooltip.
+     this._popupExpander.tooltipText = gNavigatorBundle.getString(
+       "identity.showDetails.tooltip"
+@@ -992,6 +1069,42 @@ var gIdentityHandler = {
+       this._useGrayLockIcon
+     );
+ 
++    // If HTTPS-Only Mode is enabled, check the permission status
++    const privateBrowsingWindow = PrivateBrowsingUtils.isWindowPrivate(window);
++    let httpsOnlyStatus = "";
++    // Because the HTTPS-Only Error page has a HTTPS-scheme (in most cases),
++    // where it doesn't make sense to set the permission on, we simply don't
++    // show the interface there.
++    if (
++      !this._isAboutHttpsOnlyErrorPage &&
++      (this._httpsOnlyModeEnabled ||
++        (privateBrowsingWindow && this._httpsOnlyModeEnabledPBM))
++    ) {
++      this._identityPopupHttpsOnly.removeAttribute("hidden");
++      const { state } = SitePermissions.getForPrincipal(
++        gBrowser.contentPrincipal,
++        "https-only-load-insecure"
++      );
++      switch (state) {
++        case Ci.nsIHttpsOnlyModePermission.LOAD_INSECURE_ALLOW_SESSION:
++          httpsOnlyStatus = "disabled-session";
++          break;
++        case Ci.nsIHttpsOnlyModePermission.LOAD_INSECURE_ALLOW:
++          httpsOnlyStatus = "disabled";
++          break;
++        default:
++          httpsOnlyStatus = "enabled";
++          break;
++      }
++      // Since there is no "permanence" in Private Browsing,
++      // we don't show some buttons there
++      if (privateBrowsingWindow) {
++        httpsOnlyStatus += "-pbm";
++      }
++    } else {
++      this._identityPopupHttpsOnly.setAttribute("hidden", "true");
++    }
++
+     // Update all elements.
+     let elementIDs = ["identity-popup", "identity-popup-securityView-body"];
+ 
+@@ -1002,6 +1115,7 @@ var gIdentityHandler = {
+       this._updateAttribute(element, "mixedcontent", mixedcontent);
+       this._updateAttribute(element, "isbroken", this._isBrokenConnection);
+       this._updateAttribute(element, "customroot", customRoot);
++      this._updateAttribute(element, "httpsonlystatus", httpsOnlyStatus);
+     }
+ 
+     // Initialize the optional strings to empty values
+@@ -1500,8 +1614,7 @@ var gIdentityHandler = {
+ 
+     if (
+       (aPermission.id == "popup" && !isPolicyPermission) ||
+-      aPermission.id == "autoplay-media" ||
+-      aPermission.id == "https-only-load-insecure"
++      aPermission.id == "autoplay-media"
+     ) {
+       let menulist = document.createXULElement("menulist");
+       let menupopup = document.createXULElement("menupopup");
+diff --git a/browser/components/controlcenter/content/identityPanel.inc.xhtml b/browser/components/controlcenter/content/identityPanel.inc.xhtml
+--- a/browser/components/controlcenter/content/identityPanel.inc.xhtml
++++ b/browser/components/controlcenter/content/identityPanel.inc.xhtml
+@@ -60,6 +60,44 @@
+                 oncommand="gIdentityHandler.showSecuritySubView();"/>
+       </hbox>
+ 
++      <!-- HTTPS-Only Mode Section -->
++      <vbox
++        when-connection="not-secure secure secure-ev secure-cert-user-overridden file extension cert-error-page https-only-error-page"
++        id="identity-popup-https-only" class="identity-popup-section">
++        <hbox id="identity-popup-https-only-status" align="center">
++          <label when-httpsonlystatus="enabled enabled-pbm" id="identity-popup-https-only-headline" role="heading"
++            data-l10n-id="identity-https-only-enabled"></label>
++          <label when-httpsonlystatus="disabled" id="identity-popup-https-only-headline" role="heading"
++            data-l10n-id="identity-https-only-disabled"></label>
++          <label when-httpsonlystatus="disabled-session disabled-pbm disabled-session-pbm" id="identity-popup-https-only-headline"
++            role="heading" data-l10n-id="identity-https-only-disabled-temporarily"></label>
++        </hbox>
++        <hbox pack="end">
++          <hbox when-httpsonlystatus="enabled" class="box-inherit button-box" align="center" pack="center">
++            <label id="identity-popup-https-only-support-link" class="text-link" is="text-link"
++              data-l10n-id="identity-https-only-button-site-not-working"></label>
++          </hbox>
++          <button when-httpsonlystatus="enabled enabled-pbm" class="panel-button"
++            oncommand="gIdentityHandler.allowInsecureLoads(true);">
++            <hbox class="box-inherit button-box" align="center" pack="center" flex="1">
++              <label class="button-text" data-l10n-id="identity-https-only-button-disable" />
++            </hbox>
++          </button>
++          <button when-httpsonlystatus="disabled-session" class="panel-button"
++            oncommand="gIdentityHandler.allowInsecureLoads(false);">
++            <hbox class="box-inherit button-box" align="center" pack="center" flex="1">
++              <label class="button-text" data-l10n-id="identity-https-only-button-disable-permanently" />
++            </hbox>
++          </button>
++          <button when-httpsonlystatus="disabled disabled-session disabled-pbm disabled-session-pbm"
++            class="panel-button button-primary" oncommand="gIdentityHandler.blockInsecureLoads();">
++            <hbox class="box-inherit button-box" align="center" pack="center" flex="1">
++              <label class="button-text" data-l10n-id="identity-https-only-button-enable-again" />
++            </hbox>
++          </button>
++        </hbox>
++      </vbox>
++
+       <!-- Permissions Section -->
+       <hbox class="identity-popup-section"
+             when-connection="not-secure secure secure-ev secure-cert-user-overridden file extension cert-error-page https-only-error-page">
+diff --git a/browser/locales/en-US/browser/browser.ftl b/browser/locales/en-US/browser/browser.ftl
+--- a/browser/locales/en-US/browser/browser.ftl
++++ b/browser/locales/en-US/browser/browser.ftl
+@@ -245,6 +245,15 @@ identity-passive-loaded = Parts of this 
+ identity-active-loaded = You have disabled protection on this page.
+ identity-weak-encryption = This page uses weak encryption.
+ identity-insecure-login-forms = Logins entered on this page could be compromised.
++
++identity-https-only-enabled = HTTPS upgrades are enabled
++identity-https-only-disabled = HTTPS upgrades are disabled for this site
++identity-https-only-disabled-temporarily = HTTPS upgrades are temporarily disabled for this site
++identity-https-only-button-site-not-working = Site not working?
++identity-https-only-button-disable = Disable for this site
++identity-https-only-button-disable-permanently = Disable permanently
++identity-https-only-button-enable-again = Enable again
++
+ identity-permissions =
+     .value = Permissions
+ identity-permissions-reload-hint = You may need to reload the page for changes to apply.
+diff --git a/browser/locales/en-US/chrome/browser/sitePermissions.properties b/browser/locales/en-US/chrome/browser/sitePermissions.properties
+--- a/browser/locales/en-US/chrome/browser/sitePermissions.properties
++++ b/browser/locales/en-US/chrome/browser/sitePermissions.properties
+@@ -47,4 +47,3 @@ permission.persistent-storage.label = St
+ permission.canvas.label = Extract Canvas Data
+ permission.midi.label = Access MIDI Devices
+ permission.midi-sysex.label = Access MIDI Devices with SysEx Support
+-permission.https-only-load-insecure.label = Use insecure HTTP
+diff --git a/browser/modules/SitePermissions.jsm b/browser/modules/SitePermissions.jsm
+--- a/browser/modules/SitePermissions.jsm
++++ b/browser/modules/SitePermissions.jsm
+@@ -263,8 +263,6 @@ var SitePermissions = {
+   PROMPT: Services.perms.PROMPT_ACTION,
+   ALLOW_COOKIES_FOR_SESSION: Ci.nsICookiePermission.ACCESS_SESSION,
+   AUTOPLAY_BLOCKED_ALL: Ci.nsIAutoplay.BLOCKED_ALL,
+-  ALLOW_INSECURE_LOAD_FOR_SESSION:
+-    Ci.nsIHttpsOnlyModePermission.LOAD_INSECURE_ALLOW_SESSION,
+ 
+   // Permission scopes.
+   SCOPE_REQUEST: "{SitePermissions.SCOPE_REQUEST}",
+@@ -305,14 +303,6 @@ var SitePermissions = {
+           continue;
+         }
+ 
+-        // Hide exception permission when HTTPS-Only Mode is disabled.
+-        if (
+-          permission.type == "https-only-load-insecure" &&
+-          !this.httpsOnlyModeEnabled
+-        ) {
+-          continue;
+-        }
+-
+         /* Hide persistent storage permission when extension principal
+          * have WebExtensions-unlimitedStorage permission. */
+         if (
+@@ -438,12 +428,6 @@ var SitePermissions = {
+       if (!this.resistFingerprinting) {
+         permissions = permissions.filter(permission => permission !== "canvas");
+       }
+-      // Hide exception permission when HTTPS-Only Mode is disabled.
+-      if (!this.httpsOnlyModeEnabled) {
+-        permissions = permissions.filter(
+-          permission => permission !== "https-only-load-insecure"
+-        );
+-      }
+       this._permissionsArray = permissions;
+     }
+ 
+@@ -667,15 +651,6 @@ var SitePermissions = {
+       );
+     }
+ 
+-    if (state == this.ALLOW_INSECURE_LOAD_FOR_SESSION) {
+-      if (permissionID !== "https-only-load-insecure") {
+-        throw new Error(
+-          "ALLOW_INSECURE_LOAD_FOR_SESSION can only be set on the https-only-load-insecure permission"
+-        );
+-      }
+-      scope = this.SCOPE_SESSION;
+-    }
+-
+     // Save temporary permissions.
+     if (scope == this.SCOPE_TEMPORARY) {
+       // We do not support setting temp ALLOW for security reasons.
+@@ -832,7 +807,6 @@ var SitePermissions = {
+       case this.ALLOW:
+         return gStringBundle.GetStringFromName("state.multichoice.allow");
+       case this.ALLOW_COOKIES_FOR_SESSION:
+-      case this.ALLOW_INSECURE_LOAD_FOR_SESSION:
+         return gStringBundle.GetStringFromName(
+           "state.multichoice.allowForSession"
+         );
+@@ -872,7 +846,6 @@ var SitePermissions = {
+         }
+         return gStringBundle.GetStringFromName("state.current.allowed");
+       case this.ALLOW_COOKIES_FOR_SESSION:
+-      case this.ALLOW_INSECURE_LOAD_FOR_SESSION:
+         return gStringBundle.GetStringFromName(
+           "state.current.allowedForSession"
+         );
+@@ -1064,19 +1037,6 @@ var gPermissionObject = {
+       return SitePermissions.UNKNOWN;
+     },
+   },
+-
+-  "https-only-load-insecure": {
+-    exactHostMatch: true,
+-    labelID: "https-only-load-insecure",
+-    getDefault() {
+-      return SitePermissions.BLOCK;
+-    },
+-    states: [
+-      SitePermissions.BLOCK,
+-      SitePermissions.ALLOW_INSECURE_LOAD_FOR_SESSION,
+-      SitePermissions.ALLOW,
+-    ],
+-  },
+ };
+ 
+ if (!Services.prefs.getBoolPref("dom.webmidi.enabled")) {
+@@ -1100,10 +1060,3 @@ XPCOMUtils.defineLazyPreferenceGetter(
+   false,
+   SitePermissions.invalidatePermissionList.bind(SitePermissions)
+ );
+-XPCOMUtils.defineLazyPreferenceGetter(
+-  SitePermissions,
+-  "httpsOnlyModeEnabled",
+-  "dom.security.https_only_mode",
+-  false,
+-  SitePermissions.invalidatePermissionList.bind(SitePermissions)
+-);
+diff --git a/browser/modules/test/unit/test_SitePermissions.js b/browser/modules/test/unit/test_SitePermissions.js
+--- a/browser/modules/test/unit/test_SitePermissions.js
++++ b/browser/modules/test/unit/test_SitePermissions.js
+@@ -11,9 +11,6 @@ const { Services } = ChromeUtils.import(
+ const RESIST_FINGERPRINTING_ENABLED = Services.prefs.getBoolPref(
+   "privacy.resistFingerprinting"
+ );
+-const HTTPS_ONLY_MODE_ENABLED = Services.prefs.getBoolPref(
+-  "dom.security.https_only_mode"
+-);
+ const MIDI_ENABLED = Services.prefs.getBoolPref("dom.webmidi.enabled");
+ 
+ add_task(async function testPermissionsListing() {
+@@ -38,10 +35,6 @@ add_task(async function testPermissionsL
+     // is true.
+     expectedPermissions.push("canvas");
+   }
+-  if (HTTPS_ONLY_MODE_ENABLED) {
+-    // Exception permission should be hidden unless HTTPS-Only Mode is enabled
+-    expectedPermissions.push("https-only-load-insecure");
+-  }
+   if (MIDI_ENABLED) {
+     // Should remove this checking and add it as default after it is fully pref'd-on.
+     expectedPermissions.push("midi");
+@@ -200,10 +193,6 @@ add_task(async function testExactHostMat
+     // is true.
+     exactHostMatched.push("canvas");
+   }
+-  if (HTTPS_ONLY_MODE_ENABLED) {
+-    // Exception permission should be hidden unless HTTPS-Only Mode is enabled
+-    exactHostMatched.push("https-only-load-insecure");
+-  }
+   if (MIDI_ENABLED) {
+     // WebMIDI is only pref'd on in nightly.
+     // Should remove this checking and add it as default after it is fully pref-on.
+@@ -365,52 +354,6 @@ add_task(async function testCanvasPermis
+   );
+ });
+ 
+-add_task(async function testHttpsOnlyPermission() {
+-  let originalValue = Services.prefs.getBoolPref(
+-    "dom.security.https_only_mode",
+-    false
+-  );
+-  let principal = Services.scriptSecurityManager.createContentPrincipalFromOrigin(
+-    "https://example.com"
+-  );
+-
+-  SitePermissions.setForPrincipal(
+-    principal,
+-    "https-only-load-insecure",
+-    SitePermissions.ALLOW
+-  );
+-
+-  // Exception permission is hidden when HTTPS-Only Mode is disabled
+-  Services.prefs.setBoolPref("dom.security.https_only_mode", false);
+-  Assert.equal(
+-    SitePermissions.listPermissions().indexOf("https-only-load-insecure"),
+-    -1
+-  );
+-  Assert.equal(
+-    SitePermissions.getAllByPrincipal(principal).filter(
+-      permission => permission.id === "https-only-load-insecure"
+-    ).length,
+-    0
+-  );
+-
+-  // Exception permission should show up when HTTPS-Only Mode is enabled
+-  Services.prefs.setBoolPref("dom.security.https_only_mode", true);
+-  Assert.notEqual(
+-    SitePermissions.listPermissions().indexOf("https-only-load-insecure"),
+-    -1
+-  );
+-  Assert.notEqual(
+-    SitePermissions.getAllByPrincipal(principal).filter(
+-      permission => permission.id === "https-only-load-insecure"
+-    ).length,
+-    0
+-  );
+-
+-  // Reset everything
+-  SitePermissions.removeFromPrincipal(principal, "https-only-load-insecure");
+-  Services.prefs.setBoolPref("dom.security.https_only_mode", originalValue);
+-});
+-
+ add_task(async function testFilePermissions() {
+   let principal = Services.scriptSecurityManager.createContentPrincipalFromOrigin(
+     "file:///example.js"
+diff --git a/browser/themes/shared/controlcenter/panel.inc.css b/browser/themes/shared/controlcenter/panel.inc.css
+--- a/browser/themes/shared/controlcenter/panel.inc.css
++++ b/browser/themes/shared/controlcenter/panel.inc.css
+@@ -5,7 +5,7 @@
+ %endif
+ 
+ /* Hide all conditional elements by default. */
+-:-moz-any([when-connection],[when-customroot],[when-mixedcontent],[when-ciphers]) {
++:-moz-any([when-connection],[when-customroot],[when-mixedcontent],[when-ciphers],[when-httpsonlystatus]) {
+   display: none;
+ }
+ 
+@@ -71,6 +71,13 @@
+ #identity-popup[mixedcontent~=active-blocked]:not([mixedcontent~=passive-loaded]) [when-mixedcontent=active-blocked],
+ /* Show the right elements when there is mixed passive content loaded and active blocked. */
+ #identity-popup[mixedcontent~=active-blocked][mixedcontent~=passive-loaded] [when-mixedcontent~=active-blocked][when-mixedcontent~=passive-loaded],
++/* HTTPS-Only Mode */
++#identity-popup[httpsonlystatus=disabled-session] [when-httpsonlystatus~=disabled-session],
++#identity-popup[httpsonlystatus=disabled] [when-httpsonlystatus~=disabled],
++#identity-popup[httpsonlystatus=enabled] [when-httpsonlystatus~=enabled],
++#identity-popup[httpsonlystatus=disabled-session-pbm] [when-httpsonlystatus~=disabled-session-pbm],
++#identity-popup[httpsonlystatus=disabled-pbm] [when-httpsonlystatus~=disabled-pbm],
++#identity-popup[httpsonlystatus=enabled-pbm] [when-httpsonlystatus~=enabled-pbm],
+ /* Show 'disable MCB' button always when there is mixed active content blocked. */
+ #identity-popup-securityView-body[mixedcontent~=active-blocked] > button[when-mixedcontent=active-blocked] {
+   display: inherit;
+@@ -132,25 +139,66 @@
+ 
+ #identity-popup-permissions-header,
+ .identity-popup-security-connection,
++#identity-popup-https-only-status,
+ #identity-popup-security-description {
+   /* icon indent + 16px icon width + 6px description margin
+      (total of 12px margin with the native 6px description margin) */
+   padding-inline: calc(2em + 22px) 1em;
+ }
+ 
++#identity-popup-https-only-status {
++  display: block;
++  /* 16px icon width + 6px description margin */
++  padding-inline-start: 22px;
++}
++
+ #identity-popup-security-description > description {
+   margin-top: 0.5em;
+ }
+ 
+-#identity-popup-permissions-content {
++#identity-popup-permissions-content,
++#identity-popup-https-only {
+   padding-inline: 2em 1em;
+ }
+ 
++#identity-popup-https-only button {
++  padding-inline: 1rem;
++  min-height: 30px;
++}
++
++#identity-popup-https-only button.button-primary {
++  /* primary-button-background */
++  background-color: #0060DF;
++  padding: 0 1em;
++  /* The !important designation here is to overcome the specificity of the button.css
++     styles that are being applied on linux for hovers. */
++  color: #fff !important;
++}
++
++#identity-popup-https-only button.button-primary:hover {
++  /* primary-button-background-hover */
++  background-color: #003eaa;
++}
++
++#identity-popup-https-only button.button-primary:active {
++  /* primary-button-background-active */
++  background-color: #002275;
++}
++
++#identity-popup-https-only button:hover:active {
++  color: inherit;
++}
++
+ .identity-popup-security-content,
++#identity-popup-https-only,
+ #identity-popup-permissions-content {
+   padding-block: 1em;
+ }
+ 
++#identity-popup-https-only {
++  padding-block-end: .5em;
++}
++
+ #identity-popup-permissions-header {
+   background-image: url(chrome://browser/skin/permissions.svg);
+   background-repeat: no-repeat;
+@@ -158,6 +206,13 @@
+   fill: currentColor;
+ }
+ 
++#identity-popup-https-only-status {
++  background-image: url(chrome://browser/skin/https-only-mode.svg);
++  background-repeat: no-repeat;
++  -moz-context-properties: fill;
++  fill: currentColor;
++}
++
+ #identity-popup-permissions-header:-moz-locale-dir(rtl) {
+   background-position-x: right;
+ }
+diff --git a/browser/themes/shared/identity-block/https-only-mode.svg b/browser/themes/shared/identity-block/https-only-mode.svg
+new file mode 100644
+--- /dev/null
++++ b/browser/themes/shared/identity-block/https-only-mode.svg
+@@ -0,0 +1,6 @@
++<!-- This Source Code Form is subject to the terms of the Mozilla Public
++   - License, v. 2.0. If a copy of the MPL was not distributed with this
++   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
++  <path fill="context-fill" fill-opacity="context-fill-opacity" d="M8.09333 8.96L2.46667 14.5867C2.3193 14.4466 2.20194 14.2781 2.12172 14.0913C2.0415 13.9045 2.00009 13.7033 2 13.5V8.48667C2.00352 8.09116 2.1631 7.71304 2.44403 7.43462C2.72495 7.15619 3.10447 6.99998 3.5 7H4V5C4 3.93913 4.42143 2.92172 5.17157 2.17157C5.92172 1.42143 6.93913 1 8 1C9.06087 1 10.0783 1.42143 10.8284 2.17157C11.5786 2.92172 12 3.93913 12 5V7H12.5C12.8955 6.99998 13.2751 7.15619 13.556 7.43462C13.8369 7.71304 13.9965 8.09116 14 8.48667V13.5C13.9985 13.8643 13.8633 14.2155 13.62 14.4867L8.09333 8.96ZM6.58579 3.58579C6.21071 3.96086 6 4.46957 6 5V7H10V5C10 4.46957 9.78929 3.96086 9.41421 3.58579C9.03914 3.21071 8.53043 3 8 3C7.46957 3 6.96086 3.21071 6.58579 3.58579ZM8.09334 11.7866L11.3067 15H4.88L8.09334 11.7866Z"/>
++</svg>
+diff --git a/browser/themes/shared/jar.inc.mn b/browser/themes/shared/jar.inc.mn
+--- a/browser/themes/shared/jar.inc.mn
++++ b/browser/themes/shared/jar.inc.mn
+@@ -55,6 +55,7 @@
+   skin/classic/browser/fullscreen/insecure.svg                 (../shared/fullscreen/insecure.svg)
+   skin/classic/browser/fullscreen/secure.svg                   (../shared/fullscreen/secure.svg)
+   skin/classic/browser/permissions.svg                         (../shared/identity-block/permissions.svg)
++  skin/classic/browser/https-only-mode.svg                     (../shared/identity-block/https-only-mode.svg)
+   skin/classic/browser/connection-secure.svg                   (../shared/identity-block/connection-secure.svg)
+   skin/classic/browser/connection-mixed-passive-loaded.svg     (../shared/identity-block/connection-mixed-passive-loaded.svg)
+   skin/classic/browser/connection-mixed-active-loaded.svg      (../shared/identity-block/connection-mixed-active-loaded.svg)
+@@ -78,7 +79,6 @@
+   skin/classic/browser/notification-icons/desktop-notification.svg          (../shared/notification-icons/desktop-notification.svg)
+   skin/classic/browser/notification-icons/drag-indicator.svg                (../shared/notification-icons/drag-indicator.svg)
+   skin/classic/browser/notification-icons/focus-tab-by-prompt.svg           (../shared/notification-icons/focus-tab-by-prompt.svg)
+-  skin/classic/browser/notification-icons/https-only-load-insecure-blocked.svg       (../shared/notification-icons/https-only-load-insecure-blocked.svg)
+   skin/classic/browser/notification-icons/indexedDB.svg                     (../shared/notification-icons/indexedDB.svg)
+   skin/classic/browser/notification-icons/microphone-blocked.svg            (../shared/notification-icons/microphone-blocked.svg)
+   skin/classic/browser/notification-icons/microphone-detailed.svg           (../shared/notification-icons/microphone-detailed.svg)
+diff --git a/browser/themes/shared/notification-icons.inc.css b/browser/themes/shared/notification-icons.inc.css
+--- a/browser/themes/shared/notification-icons.inc.css
++++ b/browser/themes/shared/notification-icons.inc.css
+@@ -177,10 +177,6 @@
+   list-style-image: url(chrome://browser/skin/notification-icons/midi.svg);
+ }
+ 
+-.https-only-load-insecure-icon {
+-  list-style-image: url(chrome://browser/skin/notification-icons/https-only-load-insecure-blocked.svg);
+-}
+-
+ #canvas-notification-icon,
+ .popup-notification-icon[popupid="canvas-permissions-prompt"],
+ .canvas-icon {
+diff --git a/browser/themes/shared/notification-icons/https-only-load-insecure-blocked.svg b/browser/themes/shared/notification-icons/https-only-load-insecure-blocked.svg
+deleted file mode 100644
+--- a/browser/themes/shared/notification-icons/https-only-load-insecure-blocked.svg
++++ /dev/null
+@@ -1,7 +0,0 @@
+-<!-- This Source Code Form is subject to the terms of the Mozilla Public
+-   - License, v. 2.0. If a copy of the MPL was not distributed with this
+-   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+-  <path d="M14.71,1.32a1,1,0,0,0-1.42,0L11.48,3.1A4,4,0,0,0,4,5V7H3.5A1.5,1.5,0,0,0,2,8.48v4.11l-.71.7A1,1,0,0,0,1,14a1,1,0,0,0,1,1,1,1,0,0,0,.71-.29l12-12A1,1,0,0,0,14.71,1.32ZM6,7V5a2,2,0,0,1,4-.38L7.6,7Z" fill="context-fill" fill-opacity="context-fill-opacity"/>
+-  <path d="M12.5,7H12L4,15h8.5A1.5,1.5,0,0,0,14,13.5v-5A1.5,1.5,0,0,0,12.5,7Z" fill="context-fill" fill-opacity="context-fill-opacity"/>
+-</svg>
