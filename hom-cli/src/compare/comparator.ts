@@ -36,7 +36,7 @@ export async function compare(srcDir: FetchDirectory, destDir: string): Promise<
     stats: {
       visualDiff: visualDifference,
       requestDiff: netDifference,
-      upgradeDiff: netStats.upgradedWithHom > 0 ? round((netStats.upgradedWithHomAndFailed / netStats.upgradedWithHom) * 100) : null,
+      upgradeDiffSmart: netStats.upgradedWithHom > 0 ? round((netStats.upgradedWithHomAndFailedSmart / netStats.upgradedWithHom) * 100) : null,
 
       loadedDisabled: getLoadResult(fetchResults.homDisabled),
       loadedEnabled: getLoadResult(fetchResults.homEnabled),

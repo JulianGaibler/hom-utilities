@@ -11,6 +11,24 @@
         </div>
       </div>
     </section>
+
+    <section>
+      <table>
+        <tr>
+          <th>Type</th>
+          <th class="medium">Requested</th>
+          <th class="medium">Upgraded</th>
+          <th class="medium">Smart failed upgrades</th>
+        </tr>
+        <tr v-for="type in indexData.typeSummary" :key="type.name">
+          <td>{{type.name}}</td>
+          <td>{{type.requested}}</td>
+          <td>{{type.upgraded}}</td>
+          <td>{{type.failed}}</td>
+        </tr>
+      </table>
+    </section>
+
     <section>
       <table>
         <tr>
@@ -19,8 +37,7 @@
           <th class="medium">HOM Enabled</th>
           <th class="small">Upgraded subres.</th>
           <th class="small">Visual Diff.</th>
-          <th class="small">Failed with HOM</th>
-          <th class="small">Failed upgrades</th>
+          <th class="small">Failed upgrades smart</th>
         </tr>
         <tr v-for="result in sortedEvents" :key="result.id">
           <td><router-link :to="{ name: 'Site', params: { id: result.id }}">{{result.websiteUrl}}</router-link></td>
@@ -28,8 +45,7 @@
           <td><LoadResultChip :loadResult="result.stats.loadedEnabled"/></td>
           <td class="digits">{{ result.netStats.upgradedWithHom }}</td>
           <td class="digits">{{ formatPercentage(result.stats.visualDiff) }}</td>
-          <td class="digits">{{ formatPercentage(result.stats.requestDiff) }}</td>
-          <td class="digits">{{ formatPercentage(result.stats.upgradeDiff) }}</td>
+          <td class="digits">{{ formatPercentage(result.stats.upgradeDiffSmart) }}</td>
         </tr>
       </table>
     </section>
@@ -78,8 +94,8 @@ export default {
         if (a.stats.loadedDisabled !== 'loaded' && b.stats.loadedDisabled === 'loaded') return 1
 
 
-        let aval = (a.stats.upgradeDiff || 0)
-        let bval = (b.stats.upgradeDiff || 0)
+        let aval = (a.stats.upgradeDiffSmart || 0)
+        let bval = (b.stats.upgradeDiffSmart || 0)
         if (aval > bval) return -1
         if (aval < bval) return 1
 

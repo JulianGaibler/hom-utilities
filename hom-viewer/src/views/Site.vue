@@ -61,15 +61,39 @@
           <h2>{{siteData.netStats.requestsIgnored}}</h2>
           <h3>Ignored Requests</h3>
         </div>
+      </div>
+
+      <div class="stats" v-if="siteData.stats">
         <div class="stat">
           <h2>{{siteData.netStats.upgradedWithHom}}</h2>
           <h3>Upgraded with HOM</h3>
         </div>
         <div class="stat">
-          <h2>{{siteData.netStats.upgradedWithHomAndFailed}}</h2>
-          <h3>Failed with HOM</h3>
+          <h2>{{siteData.netStats.upgradedWithHomAndFailedNaive}}</h2>
+          <h3>Failed with HOM (Naive)</h3>
+        </div>
+        <div class="stat">
+          <h2>{{siteData.netStats.upgradedWithHomAndFailedSmart}}</h2>
+          <h3>Failed with HOM (Smart)</h3>
         </div>
       </div>
+    </section>
+
+    <section>
+      <table>
+        <tr>
+          <th>Type</th>
+          <th class="medium">Requested</th>
+          <th class="medium">Upgraded</th>
+          <th class="medium">Smart failed upgrades</th>
+        </tr>
+        <tr v-for="type in siteData.netStats.byType" :key="type.name">
+          <td>{{type.name}}</td>
+          <td>{{type.requested}}</td>
+          <td>{{type.upgraded}}</td>
+          <td>{{type.failed}}</td>
+        </tr>
+      </table>
     </section>
 
     <section>

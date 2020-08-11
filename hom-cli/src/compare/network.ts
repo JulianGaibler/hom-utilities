@@ -22,8 +22,11 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
     requestsIgnored: 0,
 
     upgradedWithHom: 0,
-    failedOnHom: 0,
-    upgradedWithHomAndFailed: 0,
+    failedOnHomNaive: 0,
+    upgradedWithHomAndFailedNaive: 0,
+
+    failedOnHomSmart: 0,
+    upgradedWithHomAndFailedSmart: 0,
 
     byType: [],
   }
@@ -37,28 +40,42 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
     const ignored = ignored1 || ignored2 || isIgnored(netEvent)
     const whenRequested = getWhenRequested(netEvent)
     const type = getType(netEvent, whenRequested)
-    const failedOnHom = false
+    let failedOnHom = false
 
     // Stats
-    increaseTypeStats(netStats, type, failedOnHom)
-
-    if (ignored) { netStats.requestsIgnored++ }
-
-    if (whenRequested === WhenRequested.HomEnabled) { netStats.requestsOnlyEnabled++ }
-    else if (whenRequested === WhenRequested.HomDisabled) { netStats.requestsOnlyDisabled++ }
-    else { netStats.requestsBoth++ }
 
     if (type !== 'document') {
+      const homUpgraded = homEnabled && homEnabled.homUpgraded
+      const failedOnDisabled = homDisabled && homDisabled.failed !== false && homDisabled.failed.blocked === false
+      const failedOnEnabled = homEnabled && homEnabled.failed !== false && homEnabled.failed.blocked === false
+
       netStats.overallSubresourceRequests++
-    }
-    if (homEnabled && homEnabled.homUpgraded && type !== 'document') {
-      netStats.upgradedWithHom++
-    }
-    if (homEnabled && homEnabled.failed !== false && homEnabled.failed.blocked === false) {
-      netStats.failedOnHom++
-    }
-    if (homEnabled && homEnabled.homUpgraded && type !== 'document' && homEnabled.failed !== false && homEnabled.failed.blocked === false) {
-      netStats.upgradedWithHomAndFailed++
+
+      if (ignored) { netStats.requestsIgnored++ }
+
+      if (whenRequested === WhenRequested.HomEnabled) { netStats.requestsOnlyEnabled++ }
+      else if (whenRequested === WhenRequested.HomDisabled) { netStats.requestsOnlyDisabled++ }
+      else { netStats.requestsBoth++ }
+
+      if (homUpgraded) {
+        netStats.upgradedWithHom++
+      }
+      if (failedOnEnabled) {
+        netStats.failedOnHomNaive++
+      }
+      if (homUpgraded && failedOnEnabled) {
+        netStats.upgradedWithHomAndFailedNaive++
+      }
+
+      if (!failedOnDisabled && failedOnEnabled) {
+        netStats.failedOnHomSmart++
+      }
+      if (!failedOnDisabled && homUpgraded && failedOnEnabled) {
+        netStats.upgradedWithHomAndFailedSmart++
+        failedOnHom = true
+      }
+
+      increaseTypeStats(netStats, type, failedOnHom, homUpgraded)
     }
 
     // Assemble result object
@@ -72,22 +89,26 @@ export default async function(disabledRun: FetchRun, enabledRun: FetchRun): Prom
     }
   })
 
-  const diff = round((netStats.failedOnHom / netStats.overallRequests) * 100)
+  const diff = round((netStats.failedOnHomNaive / netStats.overallRequests) * 100)
   return [diff, analyzedEvents, netStats]
 }
 
-function increaseTypeStats(netStats: NetStats, type: string, failedOnHom: boolean) {
+function increaseTypeStats(netStats: NetStats, type: string, failedOnHom: boolean, upgraded: boolean) {
   let index = netStats.byType.findIndex((summary: TypeSummary) => summary.name === type)
 
   if (index === -1) {
     index = netStats.byType.push({
       name: type,
       requested: 0,
+      upgraded: 0,
       failed: 0,
     }) - 1
   }
 
   netStats.byType[index].requested++
+  if (upgraded) {
+    netStats.byType[index].upgraded++
+  }
   if (failedOnHom) {
     netStats.byType[index].failed++
   }

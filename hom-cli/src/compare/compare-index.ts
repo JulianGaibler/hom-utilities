@@ -2,7 +2,7 @@
 import yaml from 'yaml'
 import * as jetpack from 'fs-jetpack'
 import CliConfig from '../cli-config'
-import { CompareResult, LoadResult } from './types'
+import { CompareResult, LoadResult, TypeSummary } from './types'
 import { round } from '../utils'
 
 export interface FetchDirectory {
@@ -10,8 +10,7 @@ export interface FetchDirectory {
   name: string,
 }
 
-const VISUAL_CUTOFF = 20.0 // in %
-const SUBRESOURCE_CUTOFF = 0.0 // in %
+const VISUAL_CUTOFF = 50.0 // in %
 
 class CompareIndex {
   fetchDirectories: FetchDirectory[]
@@ -75,7 +74,8 @@ class CompareIndex {
     let highVisualDiff = 0
     let subresourcesLoaded = 0
     let subresourcesUpgraded = 0
-    let subresourcesUpgradedAndFailed = 0
+    let subresourcesUpgradedAndFailedNaive = 0
+    let subresourcesUpgradedAndFailedSmart = 0
 
     const indexResults = allResults.map((result: CompareResult) => ({
       id: result.id,
@@ -88,6 +88,8 @@ class CompareIndex {
       netStats: result.netStats,
     }))
 
+    const typeSummary: TypeSummary[] = []
+
     indexResults.forEach(result => {
       if (result.stats.loadedEnabled === LoadResult.FailedWithHomError) {
         failedOnHom++
@@ -96,11 +98,28 @@ class CompareIndex {
         highVisualDiff++
       }
 
-      subresourcesLoaded += result.netStats.overallSubresourceRequests
+      subresourcesLoaded += result.netStats.requestsOnlyEnabled
       subresourcesUpgraded += result.netStats.upgradedWithHom
-      subresourcesUpgradedAndFailed += result.netStats.upgradedWithHomAndFailed
-    })
+      subresourcesUpgradedAndFailedNaive += result.netStats.upgradedWithHomAndFailedNaive
+      subresourcesUpgradedAndFailedSmart += result.netStats.upgradedWithHomAndFailedSmart
 
+      result.netStats.byType.forEach(item => {
+        const index = typeSummary.findIndex((summary: TypeSummary) => summary.name === item.name)
+
+        if (index === -1) {
+          typeSummary.push({
+            name: item.name,
+            requested: item.requested,
+            upgraded: item.upgraded,
+            failed: item.failed,
+          })
+        } else {
+          typeSummary[index].requested += item.requested
+          typeSummary[index].upgraded += item.upgraded
+          typeSummary[index].failed += item.failed
+        }
+      })
+    })
 
     const stats = [
       {
@@ -124,19 +143,29 @@ class CompareIndex {
         name: 'Subresources upgraded',
         description: 'Percentage of all upgraded subresources',
       }, {
-        value: [subresourcesUpgradedAndFailed, subresourcesUpgraded],
+        value: [subresourcesUpgradedAndFailedNaive, subresourcesUpgraded],
         type: 'percentage',
-        name: 'Failed upgrades',
-        description: 'Percentage of failed subresources out of all upgraded subresources',
+        name: 'Naive failed upgrades',
+        description: 'Failed subresources out of all upgraded ones. Does not take into account if failed with HOM disabled. Mirrors how telemetry is being measured.',
       }, {
-        value: [subresourcesUpgradedAndFailed, subresourcesLoaded],
+        value: [subresourcesUpgradedAndFailedNaive, subresourcesLoaded],
         type: 'percentage',
-        name: 'Failed upgrades total',
-        description: 'Percentage of failed subresources out of all loaded subresources',
+        name: 'Naive failed upgrades total',
+        description: 'Failed subresources out of all loaded ones. Does not take into account if failed with HOM disabled. Mirrors how telemetry is being measured.',
+      }, {
+        value: [subresourcesUpgradedAndFailedSmart, subresourcesUpgraded],
+        type: 'percentage',
+        name: 'Smart failed upgrades',
+        description: 'Failed subresources out of all upgraded ones. Does not count subresources that already failed with HOM disabled.',
+      }, {
+        value: [subresourcesUpgradedAndFailedSmart, subresourcesLoaded],
+        type: 'percentage',
+        name: 'Smart failed upgrades total',
+        description: 'Failed subresources out of all loaded ones. Does not count subresources that already failed with HOM disabled.',
       },
     ]
 
-    await jetpack.writeAsync(jetpack.path('..', this.compareIndexPath), yaml.stringify({ stats, results: indexResults }))
+    await jetpack.writeAsync(jetpack.path('..', this.compareIndexPath), yaml.stringify({ stats, typeSummary, results: indexResults }))
   }
 }
 

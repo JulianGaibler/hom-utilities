@@ -24,7 +24,7 @@ export enum LoadResult {
 export interface Stats {
   visualDiff: number | null,
   requestDiff: number | null,
-  upgradeDiff: number | null,
+  upgradeDiffSmart: number | null,
 
   loadedDisabled: LoadResult,
   loadedEnabled: LoadResult,
@@ -41,8 +41,10 @@ export interface NetStats {
   requestsIgnored: number,
 
   upgradedWithHom: number,
-  failedOnHom: number,
-  upgradedWithHomAndFailed: number,
+  failedOnHomNaive: number,
+  upgradedWithHomAndFailedNaive: number,
+  failedOnHomSmart: number,
+  upgradedWithHomAndFailedSmart: number,
 
   byType: TypeSummary[],
 }
@@ -81,6 +83,7 @@ export interface CompareResult {
 export interface TypeSummary {
   name: string,
   requested: number,
+  upgraded: number,
   failed: number,
 }
 
